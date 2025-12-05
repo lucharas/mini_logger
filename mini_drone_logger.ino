@@ -32,6 +32,7 @@ unsigned long apStartTime = 0;
 const unsigned long AP_TIMEOUT_MS = 10 * 60 * 1000; // 10 minut AP
 
 unsigned long logStartTime = 0; // Czas startu stanu LOG (dla t_s)
+size_t currentLogSize = 0; // Bieżący rozmiar logu
 
 // --- KONFIGURACJA WIFI (AP) ---
 const char* ap_ssid = "MINI_LOGGER";
@@ -65,7 +66,9 @@ void changeState(State newState);
 // Inicjalizacja I2C i BME280
 void setupI2C() {
     Wire.begin(SDA_PIN, SCL_PIN);
-    
+    if (!bme.begin(0x76)) {
+        bme.begin(0x77); // Próba adresu alternatywnego
+    }
 }
 
 // Funkcja dodająca dane do bufora
@@ -197,6 +200,11 @@ void enterLOG() {
     if (!SPIFFS.exists(LOG_FILENAME)) {
         File file = SPIFFS.open(LOG_FILENAME, FILE_WRITE);
         file.println("t_s,T_ntc,T_bme,RH,P_hPa");
+        currentLogSize = file.size();
+        file.close();
+    } else {
+        File file = SPIFFS.open(LOG_FILENAME, FILE_READ);
+        currentLogSize = file.size();
         file.close();
     }
 
@@ -237,21 +245,7 @@ void loopLOG() {
     }
 
     // 3. Warunek PRZEJŚCIA (GUARD: 200 kB)
-    File root = SPIFFS.open("/");
-    File file = root.openNextFile();
-    size_t totalLogSize = 0;
-    while(file){
-        if (String(file.name()).equals(LOG_FILENAME)) {
-            totalLogSize = file.size();
-            file.close(); // Zamknij znaleziony plik
-            break;
-        }
-        file = root.openNextFile();
-    }
-    // W logice, jeśli plik nie zostanie znaleziony (totalLogSize == 0),
-    // to warunek nie zostanie spełniony, co jest bezpieczne.
-
-    if (totalLogSize > MAX_LOG_SIZE_BYTES) {
+    if (currentLogSize > MAX_LOG_SIZE_BYTES) {
         changeState(SAFE_EXIT);
         return;
     }
@@ -263,6 +257,7 @@ void loopLOG() {
             if (logFile) {
                 logFile.write((uint8_t*)logBuffer, bufferIndex);
                 logFile.flush();
+                currentLogSize = logFile.size(); // Aktualizacja rozmiaru
                 logFile.close();
                 bufferIndex = 0;
             }
