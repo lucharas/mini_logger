@@ -265,8 +265,8 @@ void loopLOG() {
         lastFlushTime = millis();
     }
 
-    // 5. Miganie LED (1 Hz - co 500 ms)
-    if ((millis() / 500) % 2 == 0) {
+    // 5. Miganie LED (1 Hz - 900 ms ON, 100 ms OFF)
+    if ((millis() % 1000) < 900) {
         digitalWrite(PIN_LED, LOW); 
     } else {
         digitalWrite(PIN_LED, HIGH); 
@@ -284,6 +284,9 @@ void loopSAFE_EXIT() {
 
 // STAN 4: AP
 void enterAP() {
+    // Mount SPIFFS for reading logs
+    SPIFFS.begin();
+
     WiFi.softAP(ap_ssid, ap_password);
 
     server.on("/", handleRoot);
